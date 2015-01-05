@@ -7,11 +7,13 @@ Realtime bitcoin data
 
 ## Installation
 
-Import the provided market metadata into mongodb:
+You need mongodb: http://docs.mongodb.org/manual/installation/
+
+Import the provided market metadata:
 
     $ mongoimport --db markets --collection markets --file markets.json 
 
-Install the dependencies:
+Install node dependencies:
 
     $ npm install
     
