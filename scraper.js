@@ -40,16 +40,15 @@ var db = mongoose.connection;
 mongoose.connect('mongodb://localhost/markets');
 db.on('error', console.error.bind(console, 'mongo error:'));
 db.once('open', function cb() {
-  console.log("Connected to db.")
+  console.log("Connected to db.");
   beginUpdatingMarkets();
 });
 
 function beginUpdatingMarkets() {
   Market.find({}, function (error, markets) {
-    if (error)
+    if (error) {
       console.log(error);
-
-    else
+    } else {
       for (var m in markets) {
         var market = markets[m];
         if (!market.socketURL) {
@@ -57,6 +56,7 @@ function beginUpdatingMarkets() {
           setInterval(fetchTrades, rateLimit * 1000, market); // milliseconds
         }
       }
+    }
   });
 }
 
@@ -64,29 +64,27 @@ function fetchTrades(market) {
   var options = {
     url: market.tradesURL + market.lastTrade,
     json: true,
-    headers: {'user-agent': 'Coins Live'},
+    headers: {
+      'user-agent': 'Coins Live'
+    },
     timeout: 5000
   }
 
   request.get(options, function (error, response, body) {
 
-    if (error)
+    if (error) {
       console.log(market.symbol + '\t' + error);
-
-    else if (response.statusCode != 200) {
+    } else if (response.statusCode != 200) {
       console.log(market.symbol + '\t' + 'returned status code ' + response.statusCode);
-    }
-
-    else if (market.exchange == "kraken" && body["error"][0] == "EAPI:Rate limit exceeded")
+    } else if (market.exchange == "kraken" && body["error"][0] == "EAPI:Rate limit exceeded") {
       console.log(market.symbol + "\tError: Exceeded rate limit");
-
-    else {
+    } else {
       var newTrades = getNewTrades(market, body);
-      if (newTrades.length>0) {
+      if (newTrades.length > 0) {
         console.log(market.symbol + ":\t" + newTrades.length + " trades");
 
         // Set new lastTrade
-        var lastTrade = newTrades[newTrades.length-1];
+        var lastTrade = newTrades[newTrades.length - 1];
         market.lastTrade = lastTrade["tid"];
         market.save();
 
@@ -102,16 +100,16 @@ function getNewTrades(market, body) {
   var rawTrades;
 
   // These APIs return more than just an array of trades
-  if (["anx", "btce", "kraken", "hitbtc", "btcde"].indexOf(market.exchange) != -1)
+  if (["anx", "btce", "kraken", "hitbtc", "btcde"].indexOf(market.exchange) != -1) {
     rawTrades = functions.valueForKeyPath(body, market.tradesPath);
-  else
+  } else {
     rawTrades = body;
+  }
 
   if (Array.isArray(rawTrades)) {
     var cleanTrades = rawTrades.map(sanitizeTrade, market);
     var newTrades = cleanTrades.filter(isNewTrade, market);
-  }
-  else {
+  } else {
     console.log("Not an array");
     return [];
   }
@@ -124,21 +122,19 @@ function sanitizeTrade(rawTrade, index, trades) {
   // Traverse array in ascending order if weird API
   var descending = ["bitstamp", "btce", "bitcurex", "bitfinex", "itbit", "btcde"];
   if (descending.indexOf(this.exchange) != -1)
-    rawTrade = trades[trades.length-1-index];
+    rawTrade = trades[trades.length - 1 - index];
 
   // Handle weird trade formats
   if (["bitfinex", "btce", "korbit"].indexOf(this.exchange) != -1) {
     rawTrade["date"] = rawTrade["timestamp"];
-  } 
-  else if (this.exchange == "kraken") {
+  } else if (this.exchange == "kraken") {
     rawTrade = {
       'amount': rawTrade[1],
       'price': rawTrade[0],
       'date': rawTrade[2],
       'tid': rawTrade[2] * 1000000000
     }
-  } 
-  else if (this.exchange == "hitbtc") {
+  } else if (this.exchange == "hitbtc") {
     rawTrade = {
       'amount': rawTrade[2],
       'price': rawTrade[1],
