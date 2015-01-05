@@ -1,0 +1,19 @@
+module.exports = {
+  valueForKeyPath: function (obj, path) {
+    if (obj && path)
+        for (var i = 0, path = path.split('.'), len = path.length; i < len; i++) {
+            if (obj[path[i]])
+                obj = obj[path[i]];
+            else
+                return null;
+        }
+
+    return obj;
+  },
+  penultimate: function (array) {
+    if (array && array.length > 1)
+        return array[array.length - 2];
+    else
+        return null;
+  }
+};
