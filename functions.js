@@ -15,5 +15,11 @@ module.exports = {
         return array[array.length - 2];
     else
         return null;
+  },
+  last: function (array) {
+    if (array && array.length>0)
+      return array[array.length-1];
+    else
+      return null;
   }
 };
