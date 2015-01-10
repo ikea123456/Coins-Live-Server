@@ -3,6 +3,9 @@ Coins Live (Server)
 
 ## API
 
+#####Available markets  
+`GET /markets`    
+
 #####History of a single market  
 `GET /history/:market`    
 
@@ -10,11 +13,10 @@ Example:
 `GET /history/bitstampBTCUSD`
 
 #####History of multiple markets  
-`POST /history (array markets)`  
+`POST /history` `(array markets)`  
 
 Example:  
-`POST /history`
-`{ markets: ['btceBTCUSD', 'huobiBTCCNY'] }`
+`POST /history` `{ markets: ['btceBTCUSD', 'huobiBTCCNY'] }`
 
 ## Installation
 
