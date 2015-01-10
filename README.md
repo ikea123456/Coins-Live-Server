@@ -1,9 +1,22 @@
 Coins Live (Server)
 =================
 
-Realtime bitcoin data
+Realtime Bitcoin Data
 
+## API
 
+#####History of a single market  
+`GET /history/:market`    
+
+Example:  
+`GET /history/bitstampBTCUSD`
+
+#####History of multiple markets  
+`POST /history (array markets)`  
+
+Example:  
+`POST /history`
+`{ markets: ['btceBTCUSD', 'huobiBTCCNY'] }`
 
 ## Installation
 
@@ -17,6 +30,6 @@ Install node dependencies:
 
     $ npm install
     
-You should be good to go:
+Run the app:
 
-    $ node scraper.js
+    $ node app.js
