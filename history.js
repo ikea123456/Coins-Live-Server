@@ -31,11 +31,11 @@ function readHistoryFromDb() {
 trades.on('trades', function(market, trades) {
   console.log(market.symbol + "\t" + trades.length + " trades");
   for (var t in trades) {
-		var trade = trades[t];
-		for (var range in history[market.symbol]) {
-			addTradeToRange(trade, history[market.symbol][range], range);
-		}
+	var trade = trades[t];
+	for (var range in history[market.symbol]) {
+		addTradeToRange(trade, history[market.symbol][range], range);
 	}
+}
 })
 
 trades.on('error', function(err) {
@@ -47,24 +47,30 @@ function addTradeToRange(trade, trades, range) {
 
 	//if trade is within timerange
 	if (now - trade.date < secondsInRange[range]) {
+		var date = trade.date,
+		price = parseFloat(trade.price),
+		amount = parseFloat(trade.amount);
 
 		//if range is empty create a new sample
 		if (trades.length == 0)
-			trades.push([trade.date, parseFloat(trade.amount)]);
+			trades.push([date, price, amount]);
 
 		else {
 			var latestVolume = functions.last(trades);
-			var timeSinceLatest = trade.date - latestVolume[0];
+			var timeSinceLatest = date - latestVolume[0];
 			var secondsPerSample = secondsInRange[range]/samplesPerRange;
 
 			//if time since last trade is greater than sample size create a new sample
 			if(timeSinceLatest > secondsPerSample) {
-				trades.push([trade.date, parseFloat(trade.amount)]);
+				trades.push([date, price, amount]);
 			}
 
 			//otherwise add to volume of latest sample
 			else {
-				latestVolume[1] += parseFloat(trade.amount);
+				latestVolume[1] = parseFloat(price.toFixed(2));
+				latestVolume[2] += amount;
+				latestVolume[2] = parseFloat(latestVolume[2].toFixed(2));
+
 				trades[trades.length-1] = latestVolume;
 			}
 		}
