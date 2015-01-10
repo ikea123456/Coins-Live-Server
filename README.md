@@ -1,8 +1,6 @@
 Coins Live (Server)
 =================
 
-Realtime Bitcoin Data
-
 ## API
 
 #####History of a single market  
