@@ -46,7 +46,7 @@ db.once('open', function cb() {
 function beginUpdatingMarkets() {
   Market.find({}, function (error, markets) {
     if (error) {
-      console.log(error);
+      eventEmitter.emit('error', error);
     } else {
       for (var m in markets) {
         var market = markets[m];
@@ -54,57 +54,31 @@ function beginUpdatingMarkets() {
         }
          else {
           var rateLimit = market.rateLimit || 2;
-          fetchTrades(market);
-          setInterval(fetchTrades, rateLimit * 1000, market); // milliseconds
+          fetchTradesRecursively(market);
         }
       }
     }
   });
 }
 
-function anxSocket() {
-  console.log("Connecting");
-  var socket = io('https://anxpro.com/streaming/3');
-
-
-  socket.on('connect', function(){
-    console.log("Connected to " + market.symbol)
-  });
-
-  socket.on('event', function(data){
-
-  });
-
-  socket.on('disconnect', function(){
-
-  });
-
-  socket.on('error', function(err){
-    console.log(err);
-  });
-}
-
 // Fetch new trades from exchange API
-function fetchTrades(market) {
-  var options = {
+function fetchTradesRecursively(market) {
+  request.get({
     url: market.tradesURL + market.lastTrade,
     json: true,
     headers: {
       'user-agent': 'Coins Live'
     },
     timeout: 5000
-  }
-
-  request.get(options, function (error, response, body) {
-
+  }, function (error, response, body) {
     if (error) {
       var err = market.symbol + '\t' + error;
       eventEmitter.emit('error', err);
     } else if (response.statusCode != 200) {
-      var err = market.symbol + '\t' + 'Error ' + response.statusCode;
+      var err = market.symbol + '\t' + 'Error: ' + response.statusCode;
       eventEmitter.emit('error', err);
     } else if (market.exchange == "kraken" && body["error"][0] == "EAPI:Rate limit exceeded") {
-      var err = market.symbol + "\tError: Exceeded rate limit";
+      var err = market.symbol + '\t' + 'Error: Exceeded rate limit';
       eventEmitter.emit('error', err);
     } else {
       var newTrades = getNewTrades(market, body);
@@ -117,12 +91,12 @@ function fetchTrades(market) {
         market.save();
       }
     }
+    setTimeout(fetchTradesRecursively, market.rateLimit * 1000, market); // milliseconds
   })
 }
 
 // Takes API response and parses new trades
 function getNewTrades(market, body) {
-
   var rawTrades;
 
   // These APIs return more than just an array of trades
@@ -134,14 +108,12 @@ function getNewTrades(market, body) {
 
   // Sloppy fix for weird API responses
   if (Array.isArray(rawTrades)) {
-    var cleanTrades = rawTrades.map(sanitizeTrade, market);
-    var newTrades = cleanTrades.filter(isNewTrade, market);
+    return rawTrades.map(sanitizeTrade, market)
+    .filter(isNewTrade, market);
   } else {
     eventEmitter.emit('error', market.symbol + '\t' + 'weird response');
     return [];
   }
-
-  return newTrades;
 }
 
 function sanitizeTrade(rawTrade, index, trades) {
@@ -177,8 +149,8 @@ function sanitizeTrade(rawTrade, index, trades) {
   // Sanitize values
   var cleanTrade = {
     'exchange': this.symbol,
-    'amount': parseFloat(rawTrade["amount"]).toFixed(2),
-    'price': parseFloat(rawTrade["price"]).toFixed(2),
+    'amount': parseFloat(rawTrade["amount"]),
+    'price': parseFloat(rawTrade["price"]),
     'date': parseInt(rawTrade["date"]),
     'tid': rawTrade["tid"]
   }
