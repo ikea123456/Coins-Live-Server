@@ -21,5 +21,19 @@ module.exports = {
       return array[array.length-1];
     else
       return null;
+  },
+  parse: function (json, cb) {
+    var data;
+
+    try {
+      data = JSON.parse(JSON.stringify(json)); //Does this do anything??
+    }
+
+    catch (e) {
+      cb(e);
+      return;
+    }
+
+    cb(null, data);
   }
 };
