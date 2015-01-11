@@ -16,6 +16,7 @@
   "dependencies": {
     "mongoose": "3.8.21",
     "request": "2.51.0",
-    "socket.io-client": "1.2.1"
+    "socket.io-client": "1.2.1",
+    "restify": "1.4.27"
   }
 }
