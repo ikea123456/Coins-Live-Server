@@ -1,7 +1,7 @@
 var mongoose = require('mongoose'),
   request = require('request'),
   io = require('socket.io-client'),
-  events = require('events'),
+  events = require('events'), // use streams instead!!
   functions = require('./functions.js');
 
 var eventEmitter = new events.EventEmitter();
@@ -31,6 +31,9 @@ var Market = mongoose.model('market', mongoose.Schema({
   weekTrades: Object,
   monthTrades: Object,
   yearTrades: Object
+
+  // TODO: All trades in one data structure
+  // with appropriate intervals for zooming
 
 }));
 
