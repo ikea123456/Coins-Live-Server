@@ -2,14 +2,20 @@ var history = require('./history.js'),
 functions = require('./functions.js'),
 restify = require('restify');
 
-var server = restify.createServer();
+var server = restify.createServer(),
+port = 8000;	// Should probably change to 80 on production
 server.use(restify.bodyParser());
+
+server.get('/markets', function (req, res, cb) {
+	res.send(history.availableMarkets);
+	res.end;
+});
 
 server.get('/history/:market/', function (req, res, cb) {
 	var rawMarket = req.params.market;
 	sanitizeMarkets([rawMarket], function(err, market) {
 		if (!err) {
-			res.send(historyOfMarket(market));
+			res.send(history.historyOfMarket(market));
 			res.end();
 			console.log('Sent history to ' + req.connection.remoteAddress);
 		} else {
@@ -27,7 +33,7 @@ server.post('/history', function (req, res, cb) {
 			var histories = {};
 			for (var m in markets) {
 				var market = markets[m];
-				histories[markets[m]] = historyOfMarket(markets[m]);
+				histories[markets[m]] = history.historyOfMarket(markets[m]);
 			}
 			res.send(histories);
 			res.end();
@@ -39,7 +45,8 @@ server.post('/history', function (req, res, cb) {
 	})
 });
 
-server.listen(8000);
+server.listen(port);
+console.log("Listening on port " + port);
 
 
 //**** SANITIZATION ****//
@@ -75,9 +82,4 @@ function sanitizeMarkets(raw_markets, cb) {
 		else
 			cb('Could not parse markets.');
 	})
-}
-
-function historyOfMarket(market) {
-	if (history[market])
-		return history[market];
 }
