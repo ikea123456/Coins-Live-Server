@@ -31,7 +31,7 @@ function readHistoryFromDb() {
         history[market.symbol]['w'] = market.weekTrades || [];
         history[market.symbol]['m'] = market.monthTrades || [];
         history[market.symbol]['y'] = market.yearTrades || [];
-        removeOldSamples(market);
+        setInterval(removeOldSamples, 6000, market);
         availableMarkets.push(market.symbol);
       }
     }
