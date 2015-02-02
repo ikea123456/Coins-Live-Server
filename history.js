@@ -1,9 +1,9 @@
-var trades = require('./trades.js'),
+var markets = require('./markets.js'),
   functions = require('./functions.js'),
   mongoose = require('mongoose');
 
 var history = {},
-  samplesPerRange = 100,
+  samplesPerRange = 200,
   secondsInRange = {
     'h': 3600,
     'd': 86400,
@@ -31,14 +31,14 @@ function readHistoryFromDb() {
         history[market.symbol]['w'] = market.weekTrades || [];
         history[market.symbol]['m'] = market.monthTrades || [];
         history[market.symbol]['y'] = market.yearTrades || [];
-        setInterval(removeOldSamples, 6000, market);
+        setInterval(removeOldSamples, 60000, market);
         availableMarkets.push(market.symbol);
       }
     }
   });
 }
 
-trades.on('trades', function (market, trades) {
+markets.on('trades', function (market, trades) {
   // console.log(market.symbol + "\t" + trades.length + " trades");
   for (var t in trades) {
     var trade = trades[t];
@@ -49,7 +49,7 @@ trades.on('trades', function (market, trades) {
   saveHistory(market);
 })
 
-trades.on('error', function (err) {
+markets.on('error', function (err) {
   console.log(err);
 })
 
