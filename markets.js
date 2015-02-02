@@ -1,6 +1,6 @@
 var mongoose = require('mongoose'),
   request = require('request'),
-  io = require('socket.io-client'),
+  WebSocket = require('ws'),
   events = require('events'), // use streams instead!!
   functions = require('./functions.js');
 
@@ -14,23 +14,26 @@ var Market = mongoose.model('market', mongoose.Schema({
   item: String,
   currency: String,
 
-  // API
-  tickerURL: String,
-  tradesURL: String,
-  ordersURL: String,
-  socketURL: String,
-  timePath: String,
-  tradesPath: String,
-  lastTrade: String,
-  rateLimit: Number,
-
-  // Market data
+   // Market data
   latestTrade: Object,
   hourTrades: Object,
   dayTrades: Object,
   weekTrades: Object,
   monthTrades: Object,
-  yearTrades: Object
+  yearTrades: Object,
+  asks: Object,
+  bids: Object,
+
+  // API
+  tickerURL: String,
+  tradesURL: String,
+  ordersURL: String,
+  socketURL: String,
+  tradesPath: String,
+  asksPath: String,
+  bidsPath: String,
+  lastTrade: String,
+  rateLimit: Number
 
   // TODO: All trades in one data structure
   // with appropriate intervals for zooming
@@ -43,7 +46,6 @@ mongoose.connect('mongodb://localhost/markets');
 db.on('error', console.error.bind(console, 'mongo error:'));
 db.once('open', function cb() {
   beginUpdatingMarkets();
-  // anxSocket();
 });
 
 function beginUpdatingMarkets() {
@@ -54,10 +56,11 @@ function beginUpdatingMarkets() {
       for (var m in markets) {
         var market = markets[m];
         if (market.socketURL) {
-        }
-         else {
-          var rateLimit = market.rateLimit || 2;
-          fetchTradesRecursively(market);
+
+        } else {
+          if (market.tradesURL) {
+            fetchTradesRecursively(market);
+          }
         }
       }
     }
@@ -94,7 +97,8 @@ function fetchTradesRecursively(market) {
         market.save();
       }
     }
-    setTimeout(fetchTradesRecursively, market.rateLimit * 1000, market); // milliseconds
+    var rateLimit = market.rateLimit || 2;
+    setTimeout(fetchTradesRecursively, rateLimit * 1000, market); // milliseconds
   })
 }
 
@@ -109,7 +113,7 @@ function getNewTrades(market, body) {
     rawTrades = body;
   }
 
-  // Sloppy fix for weird API responses
+  // Sloppy fix for non json API responses
   if (Array.isArray(rawTrades)) {
     return rawTrades.map(sanitizeTrade, market)
     .filter(isNewTrade, market);
