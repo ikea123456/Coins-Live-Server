@@ -22,6 +22,7 @@ module.exports = {
     else
       return null;
   },
+
   parse: function (json, cb) {
     var data;
 

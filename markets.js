@@ -1,44 +1,232 @@
 var mongoose = require('mongoose'),
   request = require('request'),
   WebSocket = require('ws'),
-  events = require('events'), // use streams instead!!
+  Pusher = require('pusher-client'),
+  io = require('socket.io-client'),
+  oldio = require('socket.io-client-old'),
+  events = require('events'), // use streams/queue instead!!
   functions = require('./functions.js');
 
 var eventEmitter = new events.EventEmitter();
 
-var Market = mongoose.model('market', mongoose.Schema({
+var Market = mongoose.model('market', require('./market'));
 
-  // Metadata
-  exchange: String,
-  symbol: String,
-  item: String,
-  currency: String,
+var lakebtc;
 
-   // Market data
-  latestTrade: Object,
-  hourTrades: Object,
-  dayTrades: Object,
-  weekTrades: Object,
-  monthTrades: Object,
-  yearTrades: Object,
-  asks: Object,
-  bids: Object,
+openLakebtc();
 
-  // API
-  tickerURL: String,
-  tradesURL: String,
-  ordersURL: String,
-  socketURL: String,
-  tradesPath: String,
-  asksPath: String,
-  bidsPath: String,
-  lastTrade: String,
-  rateLimit: Number
+function openLakebtc() {
+  lakebtc = new WebSocket('wss://www.lakebtc.com/websocket');
 
-  // TODO: All trades in one data structure
-  // with appropriate intervals for zooming
+  lakebtc.on('open', function() {
+    console.log('lakebtc open');
+    var subscribe = ["websocket_rails.subscribe",{"id":0,"data":{"channel":"orderbook_USD"}}];
+    lakebtc.send(JSON.stringify(subscribe));
 
-}));
+    lakebtc.on('message', function(message, flags) {
+      var data = JSON.parse(message);
+      var event = data[0][0];
+
+      if (event == 'websocket_rails.ping') {
+        var pong = ["websocket_rails.pong", {}];
+        lakebtc.send(JSON.stringify(pong));
+      }
+
+      else if (event == 'update') {
+        var update = data[0][1];
+        // console.log(update);
+      }
+    })
+  })
+
+  lakebtc.on('close', function() {
+    console.log('lakebtc closed');
+    setTimeout(openLakebtc, 3000);
+  })
+
+  lakebtc.on('error', function() {
+    console.log('lakebtc error');
+    setTimeout(openLakebtc, 3000);
+  })
+}
+
+
+/* BTC China WebSocket */
+
+var btcchina = io('https://websocket.btcchina.com/');
+
+btcchina.on('connect', function() {
+  btcchina.emit('subscribe', 'marketdata_cnybtc');
+})
+
+btcchina.on('trade', function (data) {
+  var cleanTrade = {
+    'exchange': 'btcchinaBTCCNY',
+    'price': parseFloat(data.price),
+    'amount': parseFloat(data.amount),
+    'date': parseInt(data.date)
+  }
+  console.log('btcchina trade');
+});
+
+/* Huobi WebSocket -- crap api */
+
+var huobi = oldio.connect('hq.huobi.com:80');
+
+huobi.on('connect', function() {
+  var symbolList = {
+    'marketDepthDiff': [{"symbolId":"btccny","pushType":"array","percent":"100"}],
+    'tradeDetail': [{"symbolId":"btccny","pushType":"pushLong"}]
+  }
+  var data = {"symbolList":symbolList, "version":1, "msgType":"reqMsgSubscribe","requestIndex":Date.now()};
+  huobi.emit('request', data);
+});
+
+huobi.on('message', function(data){
+  if (data.msgType == 'marketDepthDiff') {
+    // console.log(data.payload.version);
+  } else if (data.msgType == 'tradeDetail') {
+
+    var symbol = data.payload.symbolId;
+    var prices = data.payload.price;
+    var times = data.payload.time;
+    var sizes = data.payload.amount;
+    var ids = data.payload.tradeId;
+
+    var cleanTrades = [];
+
+    for (var i=0; i < prices.length; i++) {
+      if (i<times.length && i<times.length && i<sizes.length && i<ids.length) {
+        cleanTrades.push({
+          'exchange': 'huobi' + symbol,
+          'price': parseFloat(prices[i]),
+          'amount': parseFloat(sizes[i]),
+          'date': parseInt(times[i]),
+          'tid': ids[i]
+        })
+      } else {
+        console.log("Huobi error: API trade arrays are not the same length!");
+      }
+    }
+
+    console.log(symbol + ' trades: ' + cleanTrades.length);
+  }
+});
+
+huobi.on('disconnect', function(){
+  console.log("huobi dc");
+});
+
+huobi.on('error', function(err){
+  console.log("huobi error: " + err);
+});
+
+
+/* OKCoin WebSocket */
+
+var okcoin = new WebSocket('wss://real.okcoin.cn:10440/websocket/okcoinapi');
+okcoin.on('open', function() {
+  okcoin.send("{'event':'addChannel','channel':'ok_btccny_trades_v1'}");
+
+  okcoin.on('error', function(err) {
+    console.log("okcoin socket error: " + err);
+    //reconnect
+  })
+
+  okcoin.on('message', function(message, flags) {
+    var data = JSON.parse(message)[0]; //okcoin api wraps responses in array for some reason
+
+    if (data.channel == "ok_btccny_trades_v1") {
+      var cleanTrades = [];
+      data.data.forEach(function(trade) {
+        var rawDate = trade[3];
+        var split = rawDate.split(':');
+        var date = new Date();
+        date.setHours(+split[0]+11); // beijing to utc
+        date.setMinutes(split[1]);
+        date.setSeconds(split[2]);
+        cleanTrades.push({
+          "price": trade[1],
+          "amount": trade[2],
+          "date": parseInt(date.getTime() / 1000)
+        })
+        Market.findOne({symbol: "okcoinBTCCNY"}, function (error, market) {
+          eventEmitter.emit('trades', market, cleanTrades);
+        });
+      })
+    }
+
+    else if (data.channel == 'ok_btccny_depth60') {
+      console.log(data.data);
+      var orders = {
+        "asks": {},
+        "bids": {}
+      }
+
+      var rawAsks = data.data["asks"];
+      var rawBids = data.data["bids"];
+
+      // ascending order
+      for (var i = rawAsks.length-1; i > 0; i--) {
+        var ask = rawAsks[i];
+        var price = parseFloat(ask[0]);
+        var size = parseFloat(ask[1]);
+        orders.asks[price] = [price, size];
+      } 
+
+      for (var i = 0; i < rawBids.length; i++) {
+        var bid = rawBids[i];
+        var price = parseFloat(bid[0]);
+        var size = parseFloat(bid[1]);
+        orders.bids[price] = [price, size];
+      }
+
+      Market.findOne({symbol: "okcoinBTCCNY"}, function (error, market) {
+        eventEmitter.emit('orders', market, orders);
+      });
+    }
+  })
+})
+
+
+
+/* Bitstamp WebSocket */
+
+var bitstamp = new Pusher('de504dc5763aeef9ff52');
+var bitstampSynced = false;
+
+var bitstamp_orders = bitstamp.subscribe('diff_order_book');
+var bitstamp_trades = bitstamp.subscribe('live_trades');
+
+
+bitstamp_orders.on('data', function(data) {
+  // if ((data["asks"] && data["asks"].length > 0) || (data["bids"] && data["bids"].length > 0)) {
+    Market.findOne({exchange: "bitstamp"}, function (error, market) {
+      if (!bitstampSynced)
+        fetchOrderBook(market);
+      eventEmitter.emit('order_diff', market, data);
+    });
+  // }
+})
+
+bitstamp_trades.on('trade', function(trade) {
+  var now = parseInt(new Date().getTime() / 1000);
+  var cleanTrade = {
+      'price': trade.price,
+      'amount': trade.amount,
+      'date': now
+  }
+  Market.findOne({exchange: "bitstamp"}, function (error, market) {
+    eventEmitter.emit('trades', market, [cleanTrade]);
+  });
+})
+
+
+
+/* Coinbase WebSocket */
+
+var sockets = {};
+// var coinbase = new CoinbaseExchange.OrderBook();
 
 //Connect to db and begin updating markets
 var db = mongoose.connection;
@@ -56,10 +244,15 @@ function beginUpdatingMarkets() {
       for (var m in markets) {
         var market = markets[m];
         if (market.socketURL) {
-
+          market.syncedBook = false;
+          openSocket(market);
         } else {
-          if (market.tradesURL) {
+          if (market.tradesURL && market.exchange != "bitstamp" && market.exchange != "lakebtc" && market.symbol != "okcoinBTCCNY") {
             fetchTradesRecursively(market);
+          }
+          if (market.ordersURL) {
+            if (market.exchange != "bitstamp" && market.exchange != "lakebtc")
+              fetchOrderBook(market, "recursive");
           }
         }
       }
@@ -67,14 +260,46 @@ function beginUpdatingMarkets() {
   });
 }
 
-// Fetch new trades from exchange API
-function fetchTradesRecursively(market) {
+function openSocket(market) {
+
+  if (sockets[market.exchange]) {
+    var socket = sockets[market.exchange];
+    socket.send(market.subscribeMessage);
+    fetchOrderBook(market);
+  }
+
+  else {
+    var socket = new WebSocket(market.socketURL);
+    socket.on('open', function(){
+      socket.send(market.subscribeMessage);
+      
+      fetchOrderBook(market);
+
+      socket.on('message', function(data, flags) {
+        var rawMessage = JSON.parse(data);
+        var cleanMessage = {
+          "type": rawMessage["type"],
+          "side": rawMessage["side"] == ("sell") ? "asks" : "bids",
+          "price": parseFloat(rawMessage["price"]),
+          "size": parseFloat(rawMessage.size || rawMessage.remaining_size || rawMessage.new_size),
+          "sequence": rawMessage["sequence"],
+        }
+        eventEmitter.emit('order', market, cleanMessage);
+      });
+    });
+
+    sockets[market.symbol] = socket;
+  }
+}
+
+function fetchOrderBook(market, recursive) {
   request.get({
-    url: market.tradesURL + market.lastTrade,
+    url: market.ordersURL,
     json: true,
     headers: {
       'user-agent': 'Coins Live'
     },
+    // rejectUnauthorized: false,
     timeout: 5000
   }, function (error, response, body) {
     if (error) {
@@ -85,6 +310,96 @@ function fetchTradesRecursively(market) {
       eventEmitter.emit('error', err);
     } else if (market.exchange == "kraken" && body["error"][0] == "EAPI:Rate limit exceeded") {
       var err = market.symbol + '\t' + 'Error: Exceeded rate limit';
+      eventEmitter.emit('error', err);
+    } else {
+      var rawAsks = functions.valueForKeyPath(body, market.asksPath);
+      var rawBids = functions.valueForKeyPath(body, market.bidsPath);
+
+      var orders = {
+        "asks": {},
+        "bids": {},
+        "sequence": body["sequence"]
+      }
+
+      if (rawAsks) {
+        rawAsks.forEach(function(ask, index) {
+
+          if (market.exchange == "bitfinex") {
+            var price = ask["price"];
+            var size = ask["amount"];
+            orders.asks[price] = [price, size];
+          }
+
+          else {
+            var price = parseFloat(ask[0]);
+            var size = parseFloat(ask[1]);
+            orders.asks[price] = [price, size];
+          }
+        })
+      }
+
+
+      if (rawBids) {
+        rawBids.forEach(function(bid, index) {
+          if (market.exchange == "bitfinex") {
+            var price = bid["price"];
+            var size = bid["amount"];
+            orders.bids[price] = [price, size];
+          }
+
+          else {
+            var price = parseFloat(bid[0]);
+            var size = parseFloat(bid[1]);
+            orders.bids[price] = [price, size];
+          }
+        })
+      }
+
+      eventEmitter.emit('orders', market, orders);
+    }
+
+    if (recursive == "recursive") {
+      var rateLimit = market.rateLimit || 2;
+      setTimeout(fetchOrderBook, market.rateLimit * 1000, market, "recursive");
+    }
+  })
+}
+
+function sanitizeOrder(order) {
+  return [order[0], order[1]]
+}
+
+
+function handleSocketMessage(message) {
+  if (!market.syncedBook) {
+    market.messageQueue.forEach(function(message) {
+      if (message["sequence"] < sequence) {
+        console.log("Handling queued " + message["type"]);
+      eventEmitter.emit('orders', market, orders);
+      }
+    })
+  }
+}
+
+// Fetch new trades from exchange API
+function fetchTradesRecursively(market) {
+  request.get({
+    url: market.tradesURL + market.lastTrade,
+    json: true,
+    headers: {
+      'user-agent': 'Coins Live'
+    },
+    rejectUnauthorized: false,
+    timeout: 5000
+  }, function (error, response, body) {
+    if (error) {
+      var err = market.symbol + '\t' + error;
+      eventEmitter.emit('error', err);
+    } else if (response.statusCode != 200) {
+      var err = market.symbol + '\t' + 'Error: ' + response.statusCode;
+      eventEmitter.emit('error', err);
+    } else if (market.exchange == "kraken" && body["error"][0]) {
+      var err = market.symbol + '\t' + 'Error: ' + body["error"][0];
       eventEmitter.emit('error', err);
     } else {
       var newTrades = getNewTrades(market, body);
@@ -118,7 +433,8 @@ function getNewTrades(market, body) {
     return rawTrades.map(sanitizeTrade, market)
     .filter(isNewTrade, market);
   } else {
-    eventEmitter.emit('error', market.symbol + '\t' + 'weird response');
+    // in this case back off from api
+    eventEmitter.emit('error', market.symbol + '\t' + body);
     return [];
   }
 }
@@ -148,6 +464,14 @@ function sanitizeTrade(rawTrade, index, trades) {
       'tid': rawTrade[0]
     }
   }
+  // } else if (this.exchange == "okcoin") {
+  //   var date = new Date.parse(rawTrade[0]);
+  //   rawTrade = {
+  //     'amount': rawTrade[2],
+  //     'price': rawTrade[1],
+  //     'date': 
+  //   }
+  // }
 
   // Korbit uses milliseconds
   if (this.exchange == "korbit")
