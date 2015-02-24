@@ -150,14 +150,14 @@ okcoin.on('open', function() {
           "amount": trade[2],
           "date": parseInt(date.getTime() / 1000)
         })
-        Market.findOne({symbol: "okcoinBTCCNY"}, function (error, market) {
-          eventEmitter.emit('trades', market, cleanTrades);
-        });
+
       })
+      Market.findOne({symbol: "okcoinBTCCNY"}, function (error, market) {
+        eventEmitter.emit('trades', market, cleanTrades);
+      });
     }
 
     else if (data.channel == 'ok_btccny_depth60') {
-      console.log(data.data);
       var orders = {
         "asks": {},
         "bids": {}
@@ -180,11 +180,11 @@ okcoin.on('open', function() {
         var size = parseFloat(bid[1]);
         orders.bids[price] = [price, size];
       }
-
       Market.findOne({symbol: "okcoinBTCCNY"}, function (error, market) {
         eventEmitter.emit('orders', market, orders);
       });
     }
+
   })
 })
 
