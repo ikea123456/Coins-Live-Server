@@ -59,6 +59,7 @@ function openLakebtc() {
 var btcchina = io('https://websocket.btcchina.com/');
 
 btcchina.on('connect', function() {
+  console.log('BTC China socket connected.');
   btcchina.emit('subscribe', 'marketdata_cnybtc');
 })
 
@@ -69,7 +70,6 @@ btcchina.on('trade', function (data) {
     'amount': parseFloat(data.amount),
     'date': parseInt(data.date)
   }
-  console.log('btcchina trade');
 });
 
 /* Huobi WebSocket -- crap api */
@@ -77,8 +77,9 @@ btcchina.on('trade', function (data) {
 var huobi = oldio.connect('hq.huobi.com:80');
 
 huobi.on('connect', function() {
+  console.log('Huobi socket connected.');
   var symbolList = {
-    'marketDepthDiff': [{"symbolId":"btccny","pushType":"array","percent":"100"}],
+    // 'marketDepthDiff': [{"symbolId":"btccny","pushType":"array","percent":"100"}],
     'tradeDetail': [{"symbolId":"btccny","pushType":"pushLong"}]
   }
   var data = {"symbolList":symbolList, "version":1, "msgType":"reqMsgSubscribe","requestIndex":Date.now()};
@@ -86,9 +87,7 @@ huobi.on('connect', function() {
 });
 
 huobi.on('message', function(data){
-  if (data.msgType == 'marketDepthDiff') {
-    // console.log(data.payload.version);
-  } else if (data.msgType == 'tradeDetail') {
+  if (data.msgType == 'tradeDetail') {
 
     var symbol = data.payload.symbolId;
     var prices = data.payload.price;
@@ -107,12 +106,20 @@ huobi.on('message', function(data){
           'date': parseInt(times[i]),
           'tid': ids[i]
         })
+        console.log({
+          'exchange': 'huobi' + symbol,
+          'price': parseFloat(prices[i]),
+          'amount': parseFloat(sizes[i]),
+          'date': parseInt(times[i]),
+          'tid': ids[i]
+        });
       } else {
         console.log("Huobi error: API trade arrays are not the same length!");
       }
     }
-
-    console.log(symbol + ' trades: ' + cleanTrades.length);
+    Market.findOne({symbol: "huobiBTCCNY"}, function (error, market) {
+      eventEmitter.emit('trades', market, cleanTrades);
+    });
   }
 });
 
@@ -273,7 +280,7 @@ function beginUpdatingMarkets() {
           market.syncedBook = false;
           openSocket(market);
         } else {
-          if (market.tradesURL && market.exchange != "bitstamp" && market.exchange != "lakebtc") {
+          if (market.tradesURL && market.exchange != "bitstamp" && market.exchange != "lakebtc" && market.exchange != "huobi") {
             fetchTradesRecursively(market);
           }
           if (market.ordersURL) {
