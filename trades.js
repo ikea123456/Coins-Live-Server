@@ -2,7 +2,7 @@ var markets = require('./markets.js'),
   functions = require('./functions.js'),
   mongoose = require('mongoose');
 
-var history = {},
+var trades = {},
   samplesPerRange = 200,
   secondsInRange = {
     'h': 3600,
@@ -16,21 +16,21 @@ var availableMarkets = [];
 
 var Market = mongoose.model('market');
 
-readHistoryFromDb();
+readTradesFromDb();
 
-function readHistoryFromDb() {
+function readTradesFromDb() {
   Market.find({}, function (error, markets) {
     if (error) {
       console.log(error);
     } else {
       for (var m in markets) {
         var market = markets[m];
-        history[market.symbol] = {};
-        history[market.symbol]['h'] = market.hourTrades || [];
-        history[market.symbol]['d'] = market.dayTrades || [];
-        history[market.symbol]['w'] = market.weekTrades || [];
-        history[market.symbol]['m'] = market.monthTrades || [];
-        history[market.symbol]['y'] = market.yearTrades || [];
+        trades[market.symbol] = {};
+        trades[market.symbol]['h'] = market.hourTrades || [];
+        trades[market.symbol]['d'] = market.dayTrades || [];
+        trades[market.symbol]['w'] = market.weekTrades || [];
+        trades[market.symbol]['m'] = market.monthTrades || [];
+        trades[market.symbol]['y'] = market.yearTrades || [];
         setInterval(removeOldSamples, 60000, market);
         availableMarkets.push(market.symbol);
       }
@@ -38,15 +38,15 @@ function readHistoryFromDb() {
   });
 }
 
-markets.on('trades', function (market, trades) {
-  // console.log(market.symbol + "\t" + trades.length + " trades");
-  for (var t in trades) {
-    var trade = trades[t];
-    for (var range in history[market.symbol]) {
-      addTradeToRange(trade, history[market.symbol][range], range);
+markets.on('trades', function (market, newTrades) {
+  // console.log(market.symbol + "\t" + newTrades.length + " trades");
+  for (var t in newTrades) {
+    var trade = newTrades[t];
+    for (var range in trades[market.symbol]) {
+      addTradeToRange(trade, trades[market.symbol][range], range);
     }
   }
-  saveHistory(market);
+  saveTrades(market);
 })
 
 markets.on('error', function (err) {
@@ -90,39 +90,39 @@ function addTradeToRange(trade, trades, range) {
 // Clean this up??
 function removeOldSamples(market) {       
 	var now = new Date().getTime() / 1000;
-	for (var range in history[market.symbol]) {
+	for (var range in trades[market.symbol]) {
 		var samplesInRange = [];
-		for (var sample in history[market.symbol][range]) {
-			var date = history[market.symbol][range][sample][0];
+		for (var sample in trades[market.symbol][range]) {
+			var date = trades[market.symbol][range][sample][0];
 			if (now - date < secondsInRange[range])
-				samplesInRange.push(history[market.symbol][range][sample])
+				samplesInRange.push(trades[market.symbol][range][sample])
 		}
-		history[market.symbol][range] = samplesInRange;
+		trades[market.symbol][range] = samplesInRange;
 	};
- 	saveHistory(market);
+ 	saveTrades(market);
 }
 
-function saveHistory(market) {
+function saveTrades(market) {
   market.update({
     $set: {
-      hourTrades: history[market.symbol]['h'],
-      dayTrades: history[market.symbol]['d'],
-      weekTrades: history[market.symbol]['w'],
-      monthTrades: history[market.symbol]['m'],
-      yearTrades: history[market.symbol]['y']
+      hourTrades: trades[market.symbol]['h'],
+      dayTrades: trades[market.symbol]['d'],
+      weekTrades: trades[market.symbol]['w'],
+      monthTrades: trades[market.symbol]['m'],
+      yearTrades: trades[market.symbol]['y']
     }
   }, function () {});
 }
 
-function historyOfMarket(market) {
-  if (history[market])
-    return history[market];
+function tradesOfMarket(market) {
+  if (trades[market])
+    return trades[market];
 }
 
 module.exports = {
-  historyOfMarket: function (market) {
-    if (history[market])
-      return history[market];
+  tradesOfMarket: function (market) {
+    if (trades[market])
+      return trades[market];
   },
   availableMarkets: availableMarkets
 
