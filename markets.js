@@ -134,6 +134,7 @@ function openOkCoin() {
   okcoin = new WebSocket('wss://real.okcoin.cn:10440/websocket/okcoinapi');
   okcoin.on('open', function() {
     // okcoin.send("{'event':'addChannel','channel':'ok_btccny_trades'}");
+    okcoin.send("{'event':'addChannel','channel':'ok_btccny_depth60'}");
 
     okcoin.on('error', function(err) {
       console.log("okcoin socket error: " + err);
