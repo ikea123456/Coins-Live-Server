@@ -290,10 +290,6 @@ function openSocket(market) {
       });
     });
 
-    socket.on('error', function(err) {
-      console.log(market.symbol + "error: " + err);
-    })
-
     sockets[market.symbol] = socket;
   }
 }
