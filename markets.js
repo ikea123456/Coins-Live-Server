@@ -247,13 +247,11 @@ function beginUpdatingMarkets() {
           market.syncedBook = false;
           openSocket(market);
         } else {
-          // && market.exchange != "bitstamp" && market.exchange != "lakebtc" && market.symbol != "okcoinBTCCNY"
-          if (market.tradesURL) {
+          if (market.tradesURL && market.exchange != "bitstamp" && market.exchange != "lakebtc" && market.symbol != "okcoinBTCCNY") {
             fetchTradesRecursively(market);
           }
           if (market.ordersURL) {
-            //&& market.exchange != "lakebtc"
-            if (market.exchange != "bitstamp" )
+            if (market.exchange != "bitstamp" && market.exchange != "lakebtc")
               fetchOrderBook(market, "recursive");
           }
         }
@@ -289,6 +287,10 @@ function openSocket(market) {
         eventEmitter.emit('order', market, cleanMessage);
       });
     });
+
+    socket.on('error', function(err) {
+      console.log(market.symbol + "error: " + err);
+    })
 
     sockets[market.symbol] = socket;
   }
@@ -465,14 +467,15 @@ function sanitizeTrade(rawTrade, index, trades) {
       'date': rawTrade[3],
       'tid': rawTrade[0]
     }
-  } else if (this.exchange == "okcoin") {
-    var date = new Date.parse(rawTrade[0]);
-    rawTrade = {
-      'amount': rawTrade[2],
-      'price': rawTrade[1],
-      'date': 
-    }
   }
+  // } else if (this.exchange == "okcoin") {
+  //   var date = new Date.parse(rawTrade[0]);
+  //   rawTrade = {
+  //     'amount': rawTrade[2],
+  //     'price': rawTrade[1],
+  //     'date': 
+  //   }
+  // }
 
   // Korbit uses milliseconds
   if (this.exchange == "korbit")
