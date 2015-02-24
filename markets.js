@@ -469,15 +469,14 @@ function sanitizeTrade(rawTrade, index, trades) {
       'date': rawTrade[3],
       'tid': rawTrade[0]
     }
+  } else if (this.exchange == "okcoin") {
+    var date = new Date.parse(rawTrade[0]);
+    rawTrade = {
+      'amount': rawTrade[2],
+      'price': rawTrade[1],
+      'date': 
+    }
   }
-  // } else if (this.exchange == "okcoin") {
-  //   var date = new Date.parse(rawTrade[0]);
-  //   rawTrade = {
-  //     'amount': rawTrade[2],
-  //     'price': rawTrade[1],
-  //     'date': 
-  //   }
-  // }
 
   // Korbit uses milliseconds
   if (this.exchange == "korbit")
