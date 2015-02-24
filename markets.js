@@ -11,8 +11,11 @@ var eventEmitter = new events.EventEmitter();
 
 var Market = mongoose.model('market', require('./market'));
 
-var lakebtc;
 
+
+/* LakeBTC Socket */
+
+var lakebtc;
 openLakebtc();
 
 function openLakebtc() {
@@ -124,69 +127,77 @@ huobi.on('error', function(err){
 
 /* OKCoin WebSocket */
 
-var okcoin = new WebSocket('wss://real.okcoin.cn:10440/websocket/okcoinapi');
-okcoin.on('open', function() {
-  okcoin.send("{'event':'addChannel','channel':'ok_btccny_trades_v1'}");
+var okcoin;
+openOkCoin();
 
-  okcoin.on('error', function(err) {
-    console.log("okcoin socket error: " + err);
-    //reconnect
-  })
+function openOkCoin() {
+  okcoin = new WebSocket('wss://real.okcoin.cn:10440/websocket/okcoinapi');
+  okcoin.on('open', function() {
+    // okcoin.send("{'event':'addChannel','channel':'ok_btccny_trades'}");
 
-  okcoin.on('message', function(message, flags) {
-    var data = JSON.parse(message)[0]; //okcoin api wraps responses in array for some reason
+    okcoin.on('error', function(err) {
+      console.log("okcoin socket error: " + err);
+      setTimeout(openOkCoin, 3000);
+    })
 
-    if (data.channel == "ok_btccny_trades_v1") {
-      var cleanTrades = [];
-      data.data.forEach(function(trade) {
-        var rawDate = trade[3];
-        var split = rawDate.split(':');
-        var date = new Date();
-        date.setHours(+split[0]+11); // beijing to utc
-        date.setMinutes(split[1]);
-        date.setSeconds(split[2]);
-        cleanTrades.push({
-          "price": trade[1],
-          "amount": trade[2],
-          "date": parseInt(date.getTime() / 1000)
+    okcoin.on('message', function(message, flags) {
+      var data = JSON.parse(message)[0]; //okcoin api wraps responses in array for some reason
+
+      if (data.channel == "ok_btccny_trades") {
+        console.log(data);
+        var cleanTrades = [];
+        data.data.forEach(function(trade) {
+          var rawDate = trade[2];
+          var split = rawDate.split(':');
+          var date = new Date();
+          date.setUTCHours(+split[0]-8); // beijing to utc
+          date.setUTCMinutes(split[1]);
+          date.setUTCSeconds(split[2]);
+          cleanTrades.push({
+            "price": trade[0],
+            "amount": trade[1],
+            "date": parseInt(date.getTime() / 1000)
+          })
+
         })
-
-      })
-      Market.findOne({symbol: "okcoinBTCCNY"}, function (error, market) {
-        eventEmitter.emit('trades', market, cleanTrades);
-      });
-    }
-
-    else if (data.channel == 'ok_btccny_depth60') {
-      var orders = {
-        "asks": {},
-        "bids": {}
+        Market.findOne({symbol: "okcoinBTCCNY"}, function (error, market) {
+          eventEmitter.emit('trades', market, cleanTrades);
+        });
       }
 
-      var rawAsks = data.data["asks"];
-      var rawBids = data.data["bids"];
+      else if (data.channel == 'ok_btccny_depth60') {
+        var orders = {
+          "asks": {},
+          "bids": {}
+        }
 
-      // ascending order
-      for (var i = rawAsks.length-1; i > 0; i--) {
-        var ask = rawAsks[i];
-        var price = parseFloat(ask[0]);
-        var size = parseFloat(ask[1]);
-        orders.asks[price] = [price, size];
-      } 
+        var rawAsks = data.data["asks"];
+        var rawBids = data.data["bids"];
 
-      for (var i = 0; i < rawBids.length; i++) {
-        var bid = rawBids[i];
-        var price = parseFloat(bid[0]);
-        var size = parseFloat(bid[1]);
-        orders.bids[price] = [price, size];
+        // ascending order
+        for (var i = rawAsks.length-1; i > 0; i--) {
+          var ask = rawAsks[i];
+          var price = parseFloat(ask[0]);
+          var size = parseFloat(ask[1]);
+          orders.asks[price] = [price, size];
+        } 
+
+        for (var i = 0; i < rawBids.length; i++) {
+          var bid = rawBids[i];
+          var price = parseFloat(bid[0]);
+          var size = parseFloat(bid[1]);
+          orders.bids[price] = [price, size];
+        }
+        Market.findOne({symbol: "okcoinBTCCNY"}, function (error, market) {
+          eventEmitter.emit('orders', market, orders);
+        });
       }
-      Market.findOne({symbol: "okcoinBTCCNY"}, function (error, market) {
-        eventEmitter.emit('orders', market, orders);
-      });
-    }
 
+    })
   })
-})
+}
+
+
 
 
 
@@ -226,7 +237,21 @@ bitstamp_trades.on('trade', function(trade) {
 /* Coinbase WebSocket */
 
 var sockets = {};
-// var coinbase = new CoinbaseExchange.OrderBook();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 //Connect to db and begin updating markets
 var db = mongoose.connection;
@@ -247,11 +272,11 @@ function beginUpdatingMarkets() {
           market.syncedBook = false;
           openSocket(market);
         } else {
-          if (market.tradesURL && market.exchange != "bitstamp" && market.exchange != "lakebtc" && market.symbol != "okcoinBTCCNY") {
+          if (market.tradesURL && market.exchange != "bitstamp" && market.exchange != "lakebtc") {
             fetchTradesRecursively(market);
           }
           if (market.ordersURL) {
-            if (market.exchange != "bitstamp" && market.exchange != "lakebtc")
+            if (market.exchange != "bitstamp" && market.exchange != "lakebtc" && market.symbol != "okcoinBTCCNY")
               fetchOrderBook(market, "recursive");
           }
         }
