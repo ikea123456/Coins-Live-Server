@@ -247,11 +247,13 @@ function beginUpdatingMarkets() {
           market.syncedBook = false;
           openSocket(market);
         } else {
-          if (market.tradesURL && market.exchange != "bitstamp" && market.exchange != "lakebtc" && market.symbol != "okcoinBTCCNY") {
+          // && market.exchange != "bitstamp" && market.exchange != "lakebtc" && market.symbol != "okcoinBTCCNY"
+          if (market.tradesURL) {
             fetchTradesRecursively(market);
           }
           if (market.ordersURL) {
-            if (market.exchange != "bitstamp" && market.exchange != "lakebtc")
+            //&& market.exchange != "lakebtc"
+            if (market.exchange != "bitstamp" )
               fetchOrderBook(market, "recursive");
           }
         }
