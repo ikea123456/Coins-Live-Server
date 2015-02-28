@@ -48,6 +48,7 @@ function fetchTradesRecursively(market) {
     headers: {
       'user-agent': 'Coins Live'
     },
+    timeout: 5000,
     rejectUnauthorized: false
   }, function (error, response, body) {
     if (error) {
