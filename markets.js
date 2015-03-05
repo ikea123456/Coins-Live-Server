@@ -1,7 +1,8 @@
 var mongoose = require('mongoose'),
   request = require('request'),
   events = require('events'), // use streams/queue instead!!
-  functions = require('./functions.js');
+  functions = require('./functions.js'),
+  WebSocket = require('ws');
 
 var eventEmitter = new events.EventEmitter();
 
@@ -22,15 +23,73 @@ function beginUpdatingMarkets() {
     } else {
       for (var m in markets) {
         var market = markets[m];
-        if (market.tradesURL) {
-          fetchTradesRecursively(market);
+        if (market.exchange == 'coinbase') {
+          openSocket(market);
         }
-        if (market.ordersURL) {
-          fetchOrderBook(market, "recursive");
+
+        else {
+
+          if (market.tradesURL) {
+            fetchTradesRecursively(market);
+          }
+          if (market.ordersURL) {
+            fetchOrderBook(market, "recursive");
+          }
         }
       }
     }
   });
+}
+
+
+var sockets = {};
+
+function openSocket(market) {
+
+  if (sockets[market.exchange]) {
+    var socket = sockets[market.exchange];
+    socket.send(market.subscribeMessage);
+    fetchOrderBook(market);
+  }
+
+  else {
+    console.log(market.exchange);
+    var socket = new WebSocket(market.socketURL);
+    socket.on('open', function(){
+      socket.send(market.subscribeMessage);
+      
+      fetchOrderBook(market);
+
+      socket.on('message', function(data, flags) {
+        var rawMessage = JSON.parse(data);
+        var cleanMessage = {
+          "type": rawMessage["type"],
+          "side": rawMessage["side"] == ("sell") ? "asks" : "bids",
+          "price": parseFloat(rawMessage["price"]),
+          "size": parseFloat(rawMessage.size || rawMessage.remaining_size || rawMessage.new_size),
+          "sequence": rawMessage["sequence"],
+        }
+        eventEmitter.emit('order', market, cleanMessage);
+      });
+    });
+
+    socket.on('error', function(err) {
+      console.log(market.symbol + "error: " + err);
+    })
+
+    sockets[market.symbol] = socket;
+  }
+}
+
+function handleSocketMessage(message) {
+  if (!market.syncedBook) {
+    market.messageQueue.forEach(function(message) {
+      if (message["sequence"] < sequence) {
+        console.log("Handling queued " + message["type"]);
+      eventEmitter.emit('orders', market, orders);
+      }
+    })
+  }
 }
 
 
@@ -47,9 +106,7 @@ function fetchTradesRecursively(market) {
     json: true,
     headers: {
       'user-agent': 'Coins Live'
-    },
-    timeout: 5000,
-    rejectUnauthorized: false
+    }
   }, function (error, response, body) {
     if (error) {
       var err = market.symbol + '\t' + error;
