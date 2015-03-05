@@ -34,9 +34,12 @@ markets.on('order', function (market, order) {
     market.messageQueue.push(order);
   }
 
-  // else {
+  else {
+    if (market.exchange == "coinbase") {
+      console.log('coinbase')
+    }
     processOrder(market, order);
-  // }
+  }
 })
 
 markets.on('orders', function (market, orders) {
@@ -85,6 +88,22 @@ markets.on('order_diff', function (market, changes) {
 
 //why sending 0s for orders that dont exist on the book?
 function calculateChanges(market, orders) {
+
+  var add = {
+    "asks": [],
+    "bids": []
+  }
+
+  var remove = {
+    "asks": [],
+    "bids": []
+  }
+
+  var update = {
+    "asks": [],
+    "bids": []
+  }
+
   var changes = {
     "asks": [],
     "bids": []
@@ -141,7 +160,7 @@ function processOrder(market, order) {
       type == "changed") {
     var newData = [order.price, order.size];
     orderbook[market.symbol][side][order.price] = newData;
-    // eventEmitter.emit('change', market.symbol, changes);
+    eventEmitter.emit('change', market.symbol, changes);
   }
 
   if (type == "done") {
