@@ -160,7 +160,7 @@ function processOrder(market, order) {
       type == "changed") {
     var newData = [order.price, order.size];
     orderbook[market.symbol][side][order.price] = newData;
-    eventEmitter.emit('change', market.symbol, changes);
+    // eventEmitter.emit('change', market.symbol, changes);
   }
 
   if (type == "done") {
