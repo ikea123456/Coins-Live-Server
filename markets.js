@@ -23,11 +23,12 @@ function beginUpdatingMarkets() {
     } else {
       for (var m in markets) {
         var market = markets[m];
-        if (market.exchange == 'coinbase') {
-          openSocket(market);
-        }
+        // if (market.exchange == 'coinbase') {
+        //   market.syncedBook = false;
+        //   openSocket(market);
+        // }
 
-        else {
+        // else {
 
           if (market.tradesURL) {
             fetchTradesRecursively(market);
@@ -35,7 +36,7 @@ function beginUpdatingMarkets() {
           if (market.ordersURL) {
             fetchOrderBook(market, "recursive");
           }
-        }
+        // }
       }
     }
   });
@@ -53,7 +54,6 @@ function openSocket(market) {
   }
 
   else {
-    console.log(market.exchange);
     var socket = new WebSocket(market.socketURL);
     socket.on('open', function(){
       socket.send(market.subscribeMessage);
